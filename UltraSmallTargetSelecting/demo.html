@@ -1,0 +1,159 @@
+﻿<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Ultra-Small Target Experiment</title>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <style>
+      #ui {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 999;
+        background: rgba(255, 255, 255, 0.9);
+        padding: 10px;
+        border-radius: 5px;
+        font-family: sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="ui">
+      <button id="startBtn">▶️ Start Experiment</button>
+      <button onclick="downloadCSV()">📥 Download Data</button>
+      <p id="status">Please click "Start Experiment"</p>
+    </div>
+
+   <!-- Audio -->
+    <audio id="click-audio" src="hit.mp3" preload="auto"></audio>
+
+    <a-scene>
+      <!-- Mouse Raycaster -->
+      <a-entity cursor="rayOrigin: mouse"></a-entity>
+
+      <!-- Camera -->
+      <a-entity camera look-controls position="0 1.6 0"></a-entity>
+
+      <!-- Ground -->
+      <a-plane position="0 0 -4" rotation="-90 0 0" width="10" height="10" color="#ccc"></a-plane>
+
+      <!-- 5 Targets -->
+      <a-sphere class="target" id="target1" radius="0.05" color="red" position="-1 1.5 -3"></a-sphere>
+      <a-sphere class="target" id="target2" radius="0.05" color="red" position="-0.5 1.5 -3"></a-sphere>
+      <a-sphere class="target" id="target3" radius="0.05" color="red" position="0 1.5 -3"></a-sphere>
+      <a-sphere class="target" id="target4" radius="0.05" color="red" position="0.5 1.5 -3"></a-sphere>
+      <a-sphere class="target" id="target5" radius="0.05" color="red" position="1 1.5 -3"></a-sphere>
+    </a-scene>
+
+    <script>
+      const rounds = [
+        ["target3", "target2", "target4", "target1", "target5"],
+        ["target5", "target1", "target3", "target2", "target4"],
+        ["target5", "target2", "target4", "target1", "target3"],
+        ["target4", "target5", "target2", "target3", "target1"],
+        ["target3", "target5", "target4", "target2", "target1"]
+      ];
+
+      let currentRound = 0;
+      let currentStep = 0;
+      let trialStartTime = null;
+      let experimentStarted = false;
+      const records = [];
+      const statusEl = document.getElementById("status");
+      const startBtn = document.getElementById("startBtn");
+      const clickAudio = document.getElementById("click-audio");
+
+      function updateStatus() {
+        if (currentRound >= rounds.length) {
+          statusEl.innerText = "✅ Experiment complete! You may now download the data.";
+        } else {
+          const targetId = rounds[currentRound][currentStep];
+          statusEl.innerText = `🔵 Round ${currentRound + 1}, Step ${currentStep + 1}：点击 ${targetId}`;
+        }
+      }
+
+      function startExperiment() {
+        experimentStarted = true;
+        currentRound = 0;
+        currentStep = 0;
+        trialStartTime = Date.now();
+        updateStatus();
+      }
+
+      startBtn.addEventListener("click", startExperiment);
+
+      const allTargets = document.querySelectorAll(".target");
+      allTargets.forEach(target => {
+        target.addEventListener("click", evt => {
+          if (!experimentStarted) return;
+
+          const clickedId = target.getAttribute("id");
+          const expectedId = rounds[currentRound][currentStep];
+          const now = new Date();
+          const rt = Date.now() - trialStartTime;
+          const pos = target.getAttribute("position");
+
+          console.log("✅ Clicked", clickedId);
+
+          // Play sound
+          try {
+            clickAudio.currentTime = 0;
+            clickAudio.play();
+          } catch (e) {
+            console.warn("⚠️ Audio playback failed:", e);
+          }
+
+          // Visual feedback
+          target.setAttribute("color", clickedId === expectedId ? "lime" : "orange");
+          target.setAttribute("scale", "2 2 2");
+          setTimeout(() => {
+            target.setAttribute("color", "red");
+            target.setAttribute("scale", "1 1 1");
+          }, 500);
+
+          // Haptic feedback
+          if (navigator.vibrate) navigator.vibrate(150);
+
+          // Record data
+          records.push({
+            round: currentRound + 1,
+            step: currentStep + 1,
+            timestamp: now.toISOString(),
+            targetClicked: clickedId,
+            expectedTarget: expectedId,
+            hit: clickedId === expectedId,
+            reactionTimeMs: rt,
+            posX: pos.x,
+            posY: pos.y,
+            posZ: pos.z
+          });
+
+          // Progress state
+          if (clickedId === expectedId) {
+            currentStep++;
+            if (currentStep >= rounds[currentRound].length) {
+              currentRound++;
+              currentStep = 0;
+            }
+            trialStartTime = Date.now();
+          }
+          updateStatus();
+        });
+      });
+
+      function downloadCSV() {
+        const header = "Round,Step,Timestamp,TargetClicked,ExpectedTarget,Hit,ReactionTimeMs,PositionX,PositionY,PositionZ\n";
+        const rows = records.map(r =>
+          `${r.round},${r.step},${r.timestamp},${r.targetClicked},${r.expectedTarget},${r.hit},${r.reactionTimeMs},${r.posX},${r.posY},${r.posZ}`
+        );
+        const csv = header + rows.join("\n");
+        const blob = new Blob([csv], { type: "text/csv" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "experiment_data.csv";
+        link.click();
+      }
+    </script>
+  </body>
+</html>
