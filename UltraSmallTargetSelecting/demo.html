@@ -38,122 +38,143 @@
       <a-plane position="0 0 -4" rotation="-90 0 0" width="10" height="10" color="#ccc"></a-plane>
 
       <!-- 5 Targets -->
-      <a-sphere class="target" id="target1" radius="0.05" color="red" position="-1 1.5 -3"></a-sphere>
-      <a-sphere class="target" id="target2" radius="0.05" color="red" position="-0.5 1.5 -3"></a-sphere>
-      <a-sphere class="target" id="target3" radius="0.05" color="red" position="0 1.5 -3"></a-sphere>
-      <a-sphere class="target" id="target4" radius="0.05" color="red" position="0.5 1.5 -3"></a-sphere>
-      <a-sphere class="target" id="target5" radius="0.05" color="red" position="1 1.5 -3"></a-sphere>
+      <a-sphere class="target" id="target1" radius="0.05" color="blue" position="-1 1.5 -3"></a-sphere>
+      <a-sphere class="target" id="target2" radius="0.05" color="blue" position="-0.5 1.5 -3"></a-sphere>
+      <a-sphere class="target" id="target3" radius="0.05" color="blue" position="0 1.5 -3"></a-sphere>
+      <a-sphere class="target" id="target4" radius="0.05" color="blue" position="0.5 1.5 -3"></a-sphere>
+      <a-sphere class="target" id="target5" radius="0.05" color="blue" position="1 1.5 -3"></a-sphere>
     </a-scene>
 
     <script>
-      const rounds = [
-        ["target3", "target2", "target4", "target1", "target5"],
-        ["target5", "target1", "target3", "target2", "target4"],
-        ["target5", "target2", "target4", "target1", "target3"],
-        ["target4", "target5", "target2", "target3", "target1"],
-        ["target3", "target5", "target4", "target2", "target1"]
-      ];
+  // Experiment rounds (target sequences)
+  const rounds = [
+    ["target3", "target2", "target4", "target1", "target5"],
+    ["target5", "target1", "target3", "target2", "target4"],
+    ["target5", "target2", "target4", "target1", "target3"],
+    ["target4", "target5", "target2", "target3", "target1"],
+    ["target3", "target5", "target4", "target2", "target1"]
+  ];
 
-      let currentRound = 0;
-      let currentStep = 0;
-      let trialStartTime = null;
-      let experimentStarted = false;
-      const records = [];
-      const statusEl = document.getElementById("status");
-      const startBtn = document.getElementById("startBtn");
-      const clickAudio = document.getElementById("click-audio");
+  // Define possible feedback types
+  const feedbackTypes = ["visual", "vibration", "sound", "none"];
+  let currentFeedbackType = "visual"; // default
 
-      function updateStatus() {
-        if (currentRound >= rounds.length) {
-          statusEl.innerText = "✅ Experiment complete! You may now download the data.";
-        } else {
-          const targetId = rounds[currentRound][currentStep];
-          statusEl.innerText = `🔵 Round ${currentRound + 1}, Step ${currentStep + 1}：点击 ${targetId}`;
+  // Experiment state variables
+  let currentRound = 0;
+  let currentStep = 0;
+  let trialStartTime = null;
+  let experimentStarted = false;
+  const records = [];
+
+  // DOM elements
+  const statusEl = document.getElementById("status");
+  const startBtn = document.getElementById("startBtn");
+  const clickAudio = document.getElementById("click-audio");
+
+  // Update status message
+  function updateStatus() {
+    if (currentRound >= rounds.length) {
+      statusEl.innerText = "✅ Experiment complete! You may now download the data.";
+    } else {
+      const targetId = rounds[currentRound][currentStep];
+      statusEl.innerText = `🔵 Round ${currentRound + 1}, Step ${currentStep + 1}: Click ${targetId}`;
+    }
+  }
+
+  // Start the experiment
+  function startExperiment() {
+    experimentStarted = true;
+    currentRound = 0;
+    currentStep = 0;
+    trialStartTime = Date.now();
+    updateStatus();
+  }
+
+  // Start button listener
+  startBtn.addEventListener("click", startExperiment);
+
+  // Set up target click listeners
+  const allTargets = document.querySelectorAll(".target");
+  allTargets.forEach(target => {
+    target.addEventListener("click", evt => {
+      if (!experimentStarted) return;
+
+      const clickedId = target.getAttribute("id");
+      const expectedId = rounds[currentRound][currentStep];
+      const now = new Date();
+      const rt = Date.now() - trialStartTime;
+      const pos = target.getAttribute("position");
+
+      // 🔀 Randomly choose feedback type for this trial
+      currentFeedbackType = feedbackTypes[Math.floor(Math.random() * feedbackTypes.length)];
+      console.log("🔁 Current Feedback Type:", currentFeedbackType);
+
+      // 🟡 Execute feedback based on selected type
+      if (currentFeedbackType === "sound") {
+        try {
+          clickAudio.currentTime = 0;
+          clickAudio.play();
+        } catch (e) {
+          console.warn("⚠️ Audio playback failed:", e);
         }
       }
 
-      function startExperiment() {
-        experimentStarted = true;
-        currentRound = 0;
-        currentStep = 0;
-        trialStartTime = Date.now();
-        updateStatus();
+      if (currentFeedbackType === "vibration") {
+        if (navigator.vibrate) navigator.vibrate(150);
       }
 
-      startBtn.addEventListener("click", startExperiment);
+      if (currentFeedbackType === "visual") {
+        target.setAttribute("color", clickedId === expectedId ? "lime" : "red");
+        target.setAttribute("scale", "2 2 2");
+        setTimeout(() => {
+          target.setAttribute("color", "blue");
+          target.setAttribute("scale", "1 1 1");
+        }, 500);
+      }
 
-      const allTargets = document.querySelectorAll(".target");
-      allTargets.forEach(target => {
-        target.addEventListener("click", evt => {
-          if (!experimentStarted) return;
-
-          const clickedId = target.getAttribute("id");
-          const expectedId = rounds[currentRound][currentStep];
-          const now = new Date();
-          const rt = Date.now() - trialStartTime;
-          const pos = target.getAttribute("position");
-
-          console.log("✅ Clicked", clickedId);
-
-          // Play sound
-          try {
-            clickAudio.currentTime = 0;
-            clickAudio.play();
-          } catch (e) {
-            console.warn("⚠️ Audio playback failed:", e);
-          }
-
-          // Visual feedback
-          target.setAttribute("color", clickedId === expectedId ? "lime" : "orange");
-          target.setAttribute("scale", "2 2 2");
-          setTimeout(() => {
-            target.setAttribute("color", "red");
-            target.setAttribute("scale", "1 1 1");
-          }, 500);
-
-          // Haptic feedback
-          if (navigator.vibrate) navigator.vibrate(150);
-
-          // Record data
-          records.push({
-            round: currentRound + 1,
-            step: currentStep + 1,
-            timestamp: now.toISOString(),
-            targetClicked: clickedId,
-            expectedTarget: expectedId,
-            hit: clickedId === expectedId,
-            reactionTimeMs: rt,
-            posX: pos.x,
-            posY: pos.y,
-            posZ: pos.z
-          });
-
-          // Progress state
-          if (clickedId === expectedId) {
-            currentStep++;
-            if (currentStep >= rounds[currentRound].length) {
-              currentRound++;
-              currentStep = 0;
-            }
-            trialStartTime = Date.now();
-          }
-          updateStatus();
-        });
+      // 📝 Record trial data
+      records.push({
+        round: currentRound + 1,
+        step: currentStep + 1,
+        timestamp: now.toISOString(),
+        targetClicked: clickedId,
+        expectedTarget: expectedId,
+        hit: clickedId === expectedId,
+        reactionTimeMs: rt,
+        posX: pos.x,
+        posY: pos.y,
+        posZ: pos.z,
+        feedbackType: currentFeedbackType
       });
 
-      function downloadCSV() {
-        const header = "Round,Step,Timestamp,TargetClicked,ExpectedTarget,Hit,ReactionTimeMs,PositionX,PositionY,PositionZ\n";
-        const rows = records.map(r =>
-          `${r.round},${r.step},${r.timestamp},${r.targetClicked},${r.expectedTarget},${r.hit},${r.reactionTimeMs},${r.posX},${r.posY},${r.posZ}`
-        );
-        const csv = header + rows.join("\n");
-        const blob = new Blob([csv], { type: "text/csv" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = "experiment_data.csv";
-        link.click();
+      // ➡️ Advance experiment state
+      if (clickedId === expectedId) {
+        currentStep++;
+        if (currentStep >= rounds[currentRound].length) {
+          currentRound++;
+          currentStep = 0;
+        }
+        trialStartTime = Date.now();
       }
-    </script>
+
+      updateStatus();
+    });
+  });
+
+  // Export data as CSV
+  function downloadCSV() {
+    const header = "Round,Step,Timestamp,TargetClicked,ExpectedTarget,Hit,ReactionTimeMs,PositionX,PositionY,PositionZ,FeedbackType\n";
+    const rows = records.map(r =>
+      `${r.round},${r.step},${r.timestamp},${r.targetClicked},${r.expectedTarget},${r.hit},${r.reactionTimeMs},${r.posX},${r.posY},${r.posZ},${r.feedbackType}`
+    );
+    const csv = header + rows.join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "experiment_data.csv";
+    link.click();
+  }
+  </script>
   </body>
 </html>
