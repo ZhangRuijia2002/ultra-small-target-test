@@ -2,9 +2,14 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>Ultra-Small Target Experiment - Large Target Version</title>
-    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <title>Ultra-Small Target Experiment - Control Group (Large)</title>
     <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background-color: #f0f0f0;
+        font-family: sans-serif;
+      }
       #ui {
         position: absolute;
         top: 10px;
@@ -13,7 +18,36 @@
         background: rgba(255, 255, 255, 0.9);
         padding: 10px;
         border-radius: 5px;
-        font-family: sans-serif;
+        font-size: 16px;
+      }
+      #restCountdown {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 32px;
+        font-weight: bold;
+        color: red;
+        z-index: 1000;
+        display: none;
+        background: rgba(255, 255, 255, 0.95);
+        padding: 20px;
+        border-radius: 10px;
+      }
+      #experiment-area {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        display: flex;
+        gap: 20px;
+      }
+      .target {
+        width: 40px; /* LARGE target for control group */
+        height: 40px;
+        border-radius: 50%;
+        background-color: blue;
+        cursor: pointer;
       }
     </style>
   </head>
@@ -25,23 +59,19 @@
       <p id="status">Please enter your name and click "Start Experiment"</p>
     </div>
 
+    <div id="restCountdown">Rest Time: <span id="countdown">20</span>s</div>
+    <div id="experiment-area"></div>
     <audio id="click-audio" src="hit.mp3" preload="auto"></audio>
 
-    <a-scene>
-      <a-entity cursor="rayOrigin: mouse"></a-entity>
-      <a-entity camera look-controls position="0 1.6 0"></a-entity>
-      <a-plane position="0 0 -4" rotation="-90 0 0" width="10" height="10" color="#ccc"></a-plane>
-
-      <!-- 5 Larger Targets -->
-      <a-sphere class="target" id="target1" radius="0.1" color="blue" position="-1 1.5 -3"></a-sphere>
-      <a-sphere class="target" id="target2" radius="0.1" color="blue" position="-0.5 1.5 -3"></a-sphere>
-      <a-sphere class="target" id="target3" radius="0.1" color="blue" position="0 1.5 -3"></a-sphere>
-      <a-sphere class="target" id="target4" radius="0.1" color="blue" position="0.5 1.5 -3"></a-sphere>
-      <a-sphere class="target" id="target5" radius="0.1" color="blue" position="1 1.5 -3"></a-sphere>
-    </a-scene>
-
     <script>
-      const rounds = Array(30).fill(["target3", "target2", "target4", "target1", "target5"]);
+      const NUM_TARGETS = 5;
+      const REST_DURATION_MS = 10000;
+      const LONG_REST_MS = 20000;
+      const REST_INTERVAL = 6;
+      const rounds = Array(30).fill(0).map(() => {
+        const order = Array.from({ length: NUM_TARGETS }, (_, i) => `target${i + 1}`);
+        return order.sort(() => Math.random() - 0.5);
+      });
 
       const latinSquare = [
         ["visual", "vibration", "sound", "none"],
@@ -50,9 +80,13 @@
         ["none", "visual", "vibration", "sound"]
       ];
 
-      const ROUND_DURATION_MS = 20000; // 20 seconds per round for demo
-      const REST_INTERVAL = 6;
-      const REST_DURATION_MS = 10000; // 10 seconds rest
+      const targetsParent = document.getElementById("experiment-area");
+      for (let i = 1; i <= NUM_TARGETS; i++) {
+        const div = document.createElement("div");
+        div.className = "target";
+        div.id = `target${i}`;
+        targetsParent.appendChild(div);
+      }
 
       let participantName = "";
       let feedbackSequence = [];
@@ -61,19 +95,20 @@
       let currentStep = 0;
       let trialStartTime = null;
       let experimentStarted = false;
-      let roundTimer = null;
       const records = [];
 
       const statusEl = document.getElementById("status");
       const startBtn = document.getElementById("startBtn");
       const clickAudio = document.getElementById("click-audio");
+      const restCountdown = document.getElementById("restCountdown");
+      const countdownEl = document.getElementById("countdown");
 
       function updateStatus() {
         if (currentRound >= rounds.length) {
           statusEl.innerText = "✅ Experiment complete! You may now download the data.";
         } else {
           const targetId = rounds[currentRound][currentStep];
-          statusEl.innerText = `🔵 Round ${currentRound + 1}, Step ${currentStep + 1}: Click ${targetId} (Feedback: ${feedbackSequence[currentRound % 4]})`;
+          statusEl.innerText = `🔵 Round ${currentRound + 1}, Step ${currentStep + 1}: Click ${targetId} (Feedback: ${feedbackSequence[currentRound % feedbackSequence.length]})`;
         }
       }
 
@@ -92,56 +127,49 @@
         currentStep = 0;
         trialStartTime = Date.now();
         updateStatus();
-        startRoundTimer();
       }
 
-      function startRoundTimer() {
-        if (roundTimer) clearTimeout(roundTimer);
+      function startRest(duration, callback) {
+        restCountdown.style.display = "block";
+        let remaining = duration / 1000;
+        countdownEl.textContent = remaining;
 
-        if (currentRound > 0 && currentRound % REST_INTERVAL === 0) {
-          let restTime = REST_DURATION_MS / 1000;
-          statusEl.innerText = `⏸️ Break Time! Resume in ${restTime} seconds...`;
-          const restInterval = setInterval(() => {
-            restTime--;
-            statusEl.innerText = `⏸️ Break Time! Resume in ${restTime} seconds...`;
-            if (restTime <= 0) {
-              clearInterval(restInterval);
-              continueRound();
-            }
-          }, 1000);
+        const interval = setInterval(() => {
+          remaining--;
+          countdownEl.textContent = remaining;
+          if (remaining <= 0) {
+            clearInterval(interval);
+            restCountdown.style.display = "none";
+            callback();
+          }
+        }, 1000);
+      }
+
+      function advanceToNextRound() {
+        currentRound++;
+        currentStep = 0;
+        if (currentRound < rounds.length) {
+          const restTime = currentRound % REST_INTERVAL === 0 ? LONG_REST_MS : REST_DURATION_MS;
+          statusEl.innerText = `⏸️ Round ${currentRound + 1} will start after rest...`;
+          startRest(restTime, () => {
+            trialStartTime = Date.now();
+            updateStatus();
+          });
         } else {
-          continueRound();
+          updateStatus();
         }
       }
 
-      function continueRound() {
-        roundTimer = setTimeout(() => {
-          currentRound++;
-          currentStep = 0;
-          if (currentRound < rounds.length) {
-            trialStartTime = Date.now();
-            updateStatus();
-            startRoundTimer();
-          } else {
-            updateStatus();
-          }
-        }, ROUND_DURATION_MS);
-      }
-
-      startBtn.addEventListener("click", startExperiment);
-
-      const allTargets = document.querySelectorAll(".target");
-      allTargets.forEach(target => {
+      document.querySelectorAll(".target").forEach(target => {
         target.addEventListener("click", evt => {
           if (!experimentStarted || currentRound >= rounds.length) return;
 
-          const clickedId = target.getAttribute("id");
+          const clickedId = target.id;
           const expectedId = rounds[currentRound][currentStep];
           const now = new Date();
           const rt = Date.now() - trialStartTime;
-          const pos = target.getAttribute("position");
 
-          currentFeedbackType = feedbackSequence[currentRound % 4];
+          currentFeedbackType = feedbackSequence[currentRound % feedbackSequence.length];
 
           if (currentFeedbackType === "sound") {
             try {
@@ -157,11 +185,11 @@
           }
 
           if (currentFeedbackType === "visual") {
-            target.setAttribute("color", clickedId === expectedId ? "lime" : "red");
-            target.setAttribute("scale", "2 2 2");
+            target.style.backgroundColor = clickedId === expectedId ? "lime" : "red";
+            target.style.transform = "scale(2)";
             setTimeout(() => {
-              target.setAttribute("color", "blue");
-              target.setAttribute("scale", "1 1 1");
+              target.style.backgroundColor = "blue";
+              target.style.transform = "scale(1)";
             }, 500);
           }
 
@@ -174,9 +202,6 @@
             expectedTarget: expectedId,
             hit: clickedId === expectedId,
             reactionTimeMs: rt,
-            posX: pos.x,
-            posY: pos.y,
-            posZ: pos.z,
             feedbackType: currentFeedbackType,
             targetSize: "large"
           });
@@ -184,32 +209,31 @@
           if (clickedId === expectedId) {
             currentStep++;
             if (currentStep >= rounds[currentRound].length) {
-              currentStep = 0;
-              currentRound++;
-              if (currentRound < rounds.length) {
-                trialStartTime = Date.now();
-                startRoundTimer();
-              }
+              advanceToNextRound();
+            } else {
+              trialStartTime = Date.now();
+              updateStatus();
             }
           }
-
-          updateStatus();
         });
       });
 
+      startBtn.addEventListener("click", startExperiment);
+
       function downloadCSV() {
-        const header = "Name,Round,Step,Timestamp,TargetClicked,ExpectedTarget,Hit,ReactionTimeMs,PositionX,PositionY,PositionZ,FeedbackType,TargetSize\n";
+        const header = "Name,Round,Step,Timestamp,TargetClicked,ExpectedTarget,Hit,ReactionTimeMs,FeedbackType,TargetSize\n";
         const rows = records.map(r =>
-          `${r.name},${r.round},${r.step},${r.timestamp},${r.targetClicked},${r.expectedTarget},${r.hit},${r.reactionTimeMs},${r.posX},${r.posY},${r.posZ},${r.feedbackType},${r.targetSize}`
+          `${r.name},${r.round},${r.step},${r.timestamp},${r.targetClicked},${r.expectedTarget},${r.hit},${r.reactionTimeMs},${r.feedbackType},${r.targetSize}`
         );
         const csv = header + rows.join("\n");
         const blob = new Blob([csv], { type: "text/csv" });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.download = "experiment_data_large_target.csv";
+        link.download = "experiment_data_control_large.csv";
         link.click();
       }
     </script>
   </body>
 </html>
+
