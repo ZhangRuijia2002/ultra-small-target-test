@@ -1,257 +1,237 @@
 ﻿<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Ultra-Small Target Experiment</title>
-  <style>
-    body {
-      margin: 0;
-      font-family: sans-serif;
-      background-color: #f0f0f0;
-    }
-
-    #ui {
-      position: fixed;
-      top: 10px;
-      left: 10px;
-      z-index: 999;
-      background: rgba(255, 255, 255, 0.9);
-      padding: 12px 16px;
-      border-radius: 8px;
-      font-size: 18px;
-    }
-
-    #ui input, #ui button {
-      font-size: 16px;
-      margin: 4px 4px 0 0;
-      padding: 6px 12px;
-    }
-
-    #status {
-      margin-top: 10px;
-      font-size: 16px;
-    }
-
-    .target {
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      background-color: blue;
-      position: absolute;
-      cursor: pointer;
-    }
-
-    #restCountdown {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 32px;
-      font-weight: bold;
-      color: red;
-      z-index: 1000;
-      display: none;
-      background: rgba(255, 255, 255, 0.95);
-      padding: 20px;
-      border-radius: 10px;
-    }
-  </style>
-</head>
-<body>
-  <div id="ui">
-    <input type="text" id="username" placeholder="Enter your name" />
-    <button id="startBtn">▶️ Start Experiment</button>
-    <button onclick="downloadCSV()">📥 Download Data</button>
-    <div id="status">Please enter your name and click "Start Experiment"</div>
-  </div>
-
-  <div id="restCountdown">Rest Time: <span id="countdown">20</span>s</div>
-
-  <audio id="click-audio" src="hit.mp3" preload="auto"></audio>
-
-  <script>
-    const NUM_TARGETS = 5;
-    const REST_DURATION_MS = 10000;
-    const LONG_REST_MS = 20000;
-    const REST_INTERVAL = 6;
-    const TOTAL_ROUNDS = 30;
-
-    const latinSquare = [
-      ["visual", "vibration", "sound", "none"],
-      ["vibration", "sound", "none", "visual"],
-      ["sound", "none", "visual", "vibration"],
-      ["none", "visual", "vibration", "sound"]
-    ];
-
-    let participantName = "";
-    let feedbackSequence = [];
-    let currentRound = 0;
-    let currentStep = 0;
-    let trialStartTime = null;
-    let experimentStarted = false;
-    let records = [];
-
-    const clickAudio = document.getElementById("click-audio");
-    const statusEl = document.getElementById("status");
-    const restCountdown = document.getElementById("restCountdown");
-    const countdownEl = document.getElementById("countdown");
-
-    const targetContainer = document.createElement("div");
-    document.body.appendChild(targetContainer);
-
-    function generateTargets(order) {
-      targetContainer.innerHTML = "";
-      for (let i = 0; i < NUM_TARGETS; i++) {
-        const dot = document.createElement("div");
-        dot.className = "target";
-        dot.style.left = `${(window.innerWidth / 2 - 140) + i * 70}px`;
-        dot.style.top = `${window.innerHeight * 0.7}px`;
-        dot.id = `target${i + 1}`;
-        targetContainer.appendChild(dot);
-
-        dot.addEventListener("click", () => handleClick(dot.id));
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Ultra-Small Target Experiment</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background-color: #f0f0f0;
+        font-family: sans-serif;
       }
-    }
-
-    function randomOrder() {
-      const arr = Array.from({ length: NUM_TARGETS }, (_, i) => `target${i + 1}`);
-      return arr.sort(() => Math.random() - 0.5);
-    }
-
-    const rounds = Array(TOTAL_ROUNDS).fill(0).map(() => randomOrder());
-
-    function updateStatus() {
-      if (currentRound >= TOTAL_ROUNDS) {
-        statusEl.innerText = "✅ Experiment complete! You may now download the data.";
-      } else {
-        const currentFeedback = feedbackSequence[currentRound % feedbackSequence.length];
-        const targetId = rounds[currentRound][currentStep];
-        statusEl.innerText = `🔵 Round ${currentRound + 1}, Step ${currentStep + 1}: Click ${targetId} (Feedback: ${currentFeedback})`;
+      #ui {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 999;
+        background: rgba(255, 255, 255, 0.9);
+        padding: 10px;
+        border-radius: 5px;
+        font-size: 16px
       }
-    }
-
-    function startExperiment() {
-      const nameInput = document.getElementById("username").value.trim();
-      if (!nameInput) {
-        alert("Please enter your name before starting.");
-        return;
+      #restCountdown {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 32px;
+        font-weight: bold;
+        color: red;
+        z-index: 1000;
+        display: none;
+        background: rgba(255, 255, 255, 0.95);
+        padding: 20px;
+        border-radius: 10px;
       }
-      participantName = nameInput;
-      const index = participantName.charCodeAt(0) % latinSquare.length;
-      feedbackSequence = latinSquare[index];
-
-      currentRound = 0;
-      currentStep = 0;
-      experimentStarted = true;
-      trialStartTime = Date.now();
-      generateTargets(rounds[currentRound]);
-      updateStatus();
-    }
-
-    function handleClick(clickedId) {
-      if (!experimentStarted || currentRound >= TOTAL_ROUNDS) return;
-
-      const expectedId = rounds[currentRound][currentStep];
-      const now = new Date();
-      const rt = Date.now() - trialStartTime;
-
-      const el = document.getElementById(clickedId);
-      const rect = el.getBoundingClientRect();
-      const currentFeedback = feedbackSequence[currentRound % feedbackSequence.length];
-
-      if (currentFeedback === "sound") {
-        try {
-          clickAudio.currentTime = 0;
-          clickAudio.play();
-        } catch (e) {}
+      #experiment-area {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        display: flex;
+        gap: 20px;
       }
-
-      if (currentFeedback === "vibration" && navigator.vibrate) {
-        navigator.vibrate(150);
+      .target {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background-color: blue;
+        cursor: pointer;
       }
+    </style>
+  </head>
+  <body>
+    <div id="ui">
+      <input type="text" id="username" placeholder="Enter your name" />
+      <button id="startBtn">▶️ Start Experiment</button>
+      <button onclick="downloadCSV()">📥 Download Data</button>
+      <p id="status">Please enter your name and click "Start Experiment"</p>
+    </div>
 
-      if (currentFeedback === "visual") {
-        el.style.backgroundColor = (clickedId === expectedId) ? "lime" : "red";
-        el.style.transform = "scale(2)";
-        setTimeout(() => {
-          el.style.backgroundColor = "blue";
-          el.style.transform = "scale(1)";
-        }, 500);
-      }
+    <div id="restCountdown">Rest Time: <span id="countdown">20</span>s</div>
+    <div id="experiment-area"></div>
+    <audio id="click-audio" src="hit.mp3" preload="auto"></audio>
 
-      records.push({
-        name: participantName,
-        round: currentRound + 1,
-        step: currentStep + 1,
-        timestamp: now.toISOString(),
-        targetClicked: clickedId,
-        expectedTarget: expectedId,
-        hit: clickedId === expectedId,
-        reactionTimeMs: rt,
-        posX: rect.left,
-        posY: rect.top,
-        feedbackType: currentFeedback
+    <script>
+      const NUM_TARGETS = 5;
+      const REST_DURATION_MS = 10000;
+      const LONG_REST_MS = 20000;
+      const REST_INTERVAL = 6;
+      const rounds = Array(30).fill(0).map(() => {
+        const order = Array.from({ length: NUM_TARGETS }, (_, i) => `target${i + 1}`);
+        return order.sort(() => Math.random() - 0.5);
       });
 
-      if (clickedId === expectedId) {
-        currentStep++;
-        if (currentStep >= NUM_TARGETS) {
-          advanceToNextRound();
+      const latinSquare = [
+        ["visual", "vibration", "sound", "none"],
+        ["vibration", "sound", "none", "visual"],
+        ["sound", "none", "visual", "vibration"],
+        ["none", "visual", "vibration", "sound"]
+      ];
+
+      const targetsParent = document.getElementById("experiment-area");
+      for (let i = 1; i <= NUM_TARGETS; i++) {
+        const div = document.createElement("div");
+        div.className = "target";
+        div.id = `target${i}`;
+        targetsParent.appendChild(div);
+      }
+
+      let participantName = "";
+      let feedbackSequence = [];
+      let currentFeedbackType = "visual";
+      let currentRound = 0;
+      let currentStep = 0;
+      let trialStartTime = null;
+      let experimentStarted = false;
+      const records = [];
+
+      const statusEl = document.getElementById("status");
+      const startBtn = document.getElementById("startBtn");
+      const clickAudio = document.getElementById("click-audio");
+      const restCountdown = document.getElementById("restCountdown");
+      const countdownEl = document.getElementById("countdown");
+
+      function updateStatus() {
+        if (currentRound >= rounds.length) {
+          statusEl.innerText = "✅ Experiment complete! You may now download the data.";
         } else {
-          trialStartTime = Date.now();
-          updateStatus();
+          const targetId = rounds[currentRound][currentStep];
+          statusEl.innerText = `🔵 Round ${currentRound + 1}, Step ${currentStep + 1}: Click ${targetId} (Feedback: ${feedbackSequence[currentRound % feedbackSequence.length]})`;
         }
       }
-    }
 
-    function advanceToNextRound() {
-      currentRound++;
-      currentStep = 0;
-      if (currentRound < TOTAL_ROUNDS) {
-        const restTime = currentRound % REST_INTERVAL === 0 ? LONG_REST_MS : REST_DURATION_MS;
-        statusEl.innerText = `⏸️ Round ${currentRound + 1} will start after rest...`;
-        startRest(restTime, () => {
-          generateTargets(rounds[currentRound]);
-          trialStartTime = Date.now();
-          updateStatus();
-        });
-      } else {
+      function startExperiment() {
+        const nameInput = document.getElementById("username").value.trim();
+        if (!nameInput) {
+          alert("Please enter your name before starting.");
+          return;
+        }
+        participantName = nameInput;
+        const index = participantName.charCodeAt(0) % latinSquare.length;
+        feedbackSequence = latinSquare[index];
+
+        experimentStarted = true;
+        currentRound = 0;
+        currentStep = 0;
+        trialStartTime = Date.now();
         updateStatus();
       }
-    }
 
-    function startRest(duration, callback) {
-      restCountdown.style.display = "block";
-      let remaining = duration / 1000;
-      countdownEl.textContent = remaining;
-
-      const interval = setInterval(() => {
-        remaining--;
+      function startRest(duration, callback) {
+        restCountdown.style.display = "block";
+        let remaining = duration / 1000;
         countdownEl.textContent = remaining;
-        if (remaining <= 0) {
-          clearInterval(interval);
-          restCountdown.style.display = "none";
-          callback();
+
+        const interval = setInterval(() => {
+          remaining--;
+          countdownEl.textContent = remaining;
+          if (remaining <= 0) {
+            clearInterval(interval);
+            restCountdown.style.display = "none";
+            callback();
+          }
+        }, 1000);
+      }
+
+      function advanceToNextRound() {
+        currentRound++;
+        currentStep = 0;
+        if (currentRound < rounds.length) {
+          const restTime = currentRound % REST_INTERVAL === 0 ? LONG_REST_MS : REST_DURATION_MS;
+          statusEl.innerText = `⏸️ Round ${currentRound + 1} will start after rest...`;
+          startRest(restTime, () => {
+            trialStartTime = Date.now();
+            updateStatus();
+          });
+        } else {
+          updateStatus();
         }
-      }, 1000);
-    }
+      }
 
-    function downloadCSV() {
-      const header = "Name,Round,Step,Timestamp,TargetClicked,ExpectedTarget,Hit,ReactionTimeMs,PositionX,PositionY,FeedbackType\n";
-      const rows = records.map(r =>
-        `${r.name},${r.round},${r.step},${r.timestamp},${r.targetClicked},${r.expectedTarget},${r.hit},${r.reactionTimeMs},${r.posX},${r.posY},${r.feedbackType}`
-      );
-      const csv = header + rows.join("\n");
-      const blob = new Blob([csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "experiment_data.csv";
-      a.click();
-    }
+      document.querySelectorAll(".target").forEach(target => {
+        target.addEventListener("click", evt => {
+          if (!experimentStarted || currentRound >= rounds.length) return;
 
-    document.getElementById("startBtn").addEventListener("click", startExperiment);
-  </script>
-</body>
+          const clickedId = target.id;
+          const expectedId = rounds[currentRound][currentStep];
+          const now = new Date();
+          const rt = Date.now() - trialStartTime;
+
+          currentFeedbackType = feedbackSequence[currentRound % feedbackSequence.length];
+
+          if (currentFeedbackType === "sound") {
+            try {
+              clickAudio.currentTime = 0;
+              clickAudio.play();
+            } catch (e) {
+              console.warn("⚠️ Audio playback failed:", e);
+            }
+          }
+
+          if (currentFeedbackType === "vibration") {
+            if (navigator.vibrate) navigator.vibrate(150);
+          }
+
+          if (currentFeedbackType === "visual") {
+            target.style.backgroundColor = clickedId === expectedId ? "lime" : "red";
+            target.style.transform = "scale(2)";
+            setTimeout(() => {
+              target.style.backgroundColor = "blue";
+              target.style.transform = "scale(1)";
+            }, 500);
+          }
+
+          records.push({
+            name: participantName,
+            round: currentRound + 1,
+            step: currentStep + 1,
+            timestamp: now.toISOString(),
+            targetClicked: clickedId,
+            expectedTarget: expectedId,
+            hit: clickedId === expectedId,
+            reactionTimeMs: rt,
+            feedbackType: currentFeedbackType
+          });
+
+          if (clickedId === expectedId) {
+            currentStep++;
+            if (currentStep >= rounds[currentRound].length) {
+              advanceToNextRound();
+            } else {
+              trialStartTime = Date.now();
+              updateStatus();
+            }
+          }
+        });
+      });
+
+      startBtn.addEventListener("click", startExperiment);
+
+      function downloadCSV() {
+        const header = "Name,Round,Step,Timestamp,TargetClicked,ExpectedTarget,Hit,ReactionTimeMs,FeedbackType\n";
+        const rows = records.map(r =>
+          `${r.name},${r.round},${r.step},${r.timestamp},${r.targetClicked},${r.expectedTarget},${r.hit},${r.reactionTimeMs},${r.feedbackType}`
+        );
+        const csv = header + rows.join("\n");
+        const blob = new Blob([csv], { type: "text/csv" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "experiment_data.csv";
+        link.click();
+      }
+    </script>
+  </body>
 </html>
